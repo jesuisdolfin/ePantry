@@ -5,6 +5,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { nanoid } from "nanoid/non-secure";
 
 export type Unit = "ea" | "g" | "ml" | "lb" | "oz";
+export type Ingredient = { name: string; qty: number; unit: Unit; upc?: string };
+
 
 export type PantryItem = {
   id: string;
@@ -31,6 +33,8 @@ type InventoryState = {
 
   // NEW: update item fields by UPC (e.g., after product lookup)
   updateByUpc: (upc: string, partial: Partial<Pick<PantryItem, "name" | "brand" | "image_url" | "size">>) => void;
+  cookFromIngredients: (ings: Ingredient[]) => { ok: boolean; shortages: { name: string; need: number; have: number; unit: Unit }[] };
+
 
   setItems: (items: PantryItem[]) => void;
   reset: () => void;
@@ -76,6 +80,60 @@ export const useInventoryStore = create<InventoryState>()(
           next[idx] = { ...next[idx], qty: newQty, updated_at: new Date().toISOString() };
           return { items: next };
         }),
+
+        cookFromIngredients: (ings: Ingredient[]) => {
+  const { items } = get();
+
+  // simple unit normalization for matching
+  const norm = (s: string) => s.trim().toLowerCase();
+  const toUnit = (u: string): Unit => {
+    const x = norm(u);
+    if (x.includes("g")) return "g";
+    if (x.includes("ml")) return "ml";
+    if (x.includes("lb")) return "lb";
+    if (x.includes("oz")) return "oz";
+    return "ea";
+  };
+
+  // pre-check shortages
+  const shortages: { name: string; need: number; have: number; unit: Unit }[] = [];
+  for (const ing of ings) {
+    // find by UPC if provided, otherwise name match
+    const match = ing.upc
+      ? items.find(i => i.upc === ing.upc)
+      : items.find(i => norm(i.name) === norm(ing.name));
+
+    const have = match?.qty ?? 0;
+    const need = ing.qty;
+
+    if (have < need) {
+      shortages.push({
+        name: match?.name || ing.name,
+        need,
+        have,
+        unit: ing.unit,
+      });
+    }
+  }
+
+  if (shortages.length) {
+    return { ok: false as const, shortages };
+  }
+
+  // deduct
+  const next = items.map(it => {
+    const ing = ings.find(x =>
+      (x.upc && x.upc === it.upc) ||
+      norm(x.name) === norm(it.name)
+    );
+    if (!ing) return it;
+    return { ...it, qty: Math.max(0, it.qty - ing.qty), updated_at: new Date().toISOString() };
+  });
+
+  set({ items: next });
+  return { ok: true as const, shortages: [] as any[] };
+},
+
 
       removeItem: (id) =>
         set(({ items }) => ({ items: items.filter((i) => i.id !== id) })),

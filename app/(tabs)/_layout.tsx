@@ -22,6 +22,7 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen name="recipes" options={{ title: "Recipes" }} />
       <Tabs.Screen
         name="scan"
         options={{
