@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, Pressable, Alert } from "react-native";
+import { addSamplePantryItems } from '../../scripts/addSamplePantryItems';
 import * as Haptics from "expo-haptics";
 import { useInventoryStore } from "../../src/state/inventory"; // or "@/state/inventory" if you set aliases
 import { colors } from "../../src/ui/theme";
@@ -40,6 +41,16 @@ export default function Settings() {
 
       <Pressable style={[styles.button]} onPress={confirmClear}>
         <Text style={styles.buttonText}>Clear all data</Text>
+      </Pressable>
+
+      <Pressable
+        style={[styles.button, { backgroundColor: colors.brand, marginTop: 12 }]}
+        onPress={() => {
+          addSamplePantryItems();
+          Alert.alert('Sample items added', 'Sample pantry items have been added for testing.');
+        }}
+      >
+        <Text style={styles.buttonText}>Add Sample Pantry Items</Text>
       </Pressable>
 
       <Text style={styles.note}>

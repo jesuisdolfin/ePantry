@@ -14,10 +14,11 @@ export default function Scan() {
   const isFocused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
 
-  // Active only while the button is pressed
-  const [isActive, setIsActive] = useState(false);
+  // Always active when camera is focused
+  const [isActive, setIsActive] = useState(true);
 
   const [lastCode, setLastCode] = useState<string | null>(null);
+  const [pendingCode, setPendingCode] = useState<string | null>(null);
   const lastValueRef = useRef<string | null>(null);
   const dedupeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -48,47 +49,11 @@ export default function Scan() {
   const handleBarcodeScanned = async ({ data }: BarcodeScanningResult) => {
     if (!isFocused || !isActive || !data) return;
     if (!isRetailBarcode(data)) return;
-    if (lastValueRef.current === data) return; // dedupe for a short window
+    if (lastValueRef.current === data || pendingCode) return; // dedupe for a short window or if popup is open
 
     lastValueRef.current = data;
-    setLastCode(data);
-
+    setPendingCode(data);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-
-    // Instant optimistic update
-    addOrIncrementByUpc({
-      upc: data,
-      name: `Item (${data})`,
-      brand: "Unknown",
-      unit: "ea",
-      qty: 1,
-    });
-
-    // Background product lookup (session-cached)
-    if (!productCache[data]) {
-      try {
-        if (abortRef.current) abortRef.current.abort();
-        abortRef.current = new AbortController();
-        const info = await fetchOFFByBarcode(data, abortRef.current.signal);
-        if (info) {
-          updateByUpc(data, {
-            name: info.name,
-            brand: info.brand,
-            image_url: info.imageUrl,
-            size: info.size,
-          });
-        }
-      } catch {}
-    } else {
-      updateByUpc(data, productCache[data]);
-    }
-
-    // allow same code again after ~1s (so you can re-scan intentionally)
-    if (dedupeTimerRef.current) clearTimeout(dedupeTimerRef.current);
-    dedupeTimerRef.current = setTimeout(() => {
-      if (!isActive) return; // if not scanning anymore, keep it cleared
-      lastValueRef.current = null;
-    }, 1000);
   };
 
   if (!permission) {
@@ -120,7 +85,7 @@ export default function Scan() {
           barcodeScannerSettings={{
             barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128", "code39"],
           }}
-          onBarcodeScanned={isActive ? handleBarcodeScanned : undefined}
+          onBarcodeScanned={handleBarcodeScanned}
         />
       ) : (
         <View style={styles.center}><Text style={styles.subtle}>Scanner paused</Text></View>
@@ -130,24 +95,77 @@ export default function Scan() {
       <View style={styles.overlay}>
         <View style={styles.frame} />
         <View style={styles.bottomBar}>
-          {lastCode ? (
-            <Text style={styles.code}>Scanned: {lastCode}</Text>
+          {pendingCode ? (
+            <Text style={styles.code}>Scanned: {pendingCode}</Text>
+          ) : lastCode ? (
+            <Text style={styles.code}>Last added: {lastCode}</Text>
           ) : (
-            <Text style={styles.help}>Hold button to scan</Text>
+            <Text style={styles.help}>Point camera at barcode</Text>
           )}
-          <Pressable
-            onPressIn={() => setIsActive(true)}
-            onPressOut={() => {
-              setIsActive(false);
-              lastValueRef.current = null; // reset dedupe when you stop holding
-            }}
-            style={({ pressed }) => [styles.holdButton, pressed && { opacity: 0.9 }]}
-          >
-            <MaterialCommunityIcons name={isActive ? "pause" : "play"} size={18} color="#fff" />
-            <Text style={styles.holdText}>{isActive ? "Release to stop" : "Hold to scan"}</Text>
-          </Pressable>
         </View>
       </View>
+
+      {/* Popup for add confirmation */}
+      {pendingCode && (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', zIndex: 10 }]}> 
+          <View style={{ backgroundColor: colors.card, borderRadius: radius.lg, padding: 28, alignItems: 'center', width: 320, maxWidth: '90%' }}>
+            <Text style={{ color: colors.fg, fontWeight: '700', fontSize: 18, marginBottom: 12 }}>Add item?</Text>
+            <Text style={{ color: colors.fgDim, marginBottom: 18 }}>Barcode: {pendingCode}</Text>
+            <View style={{ flexDirection: 'row', gap: 16 }}>
+              <Pressable
+                style={[styles.holdButton, { backgroundColor: colors.brand }]}
+                onPress={async () => {
+                  setLastCode(pendingCode);
+                  setPendingCode(null);
+                  addOrIncrementByUpc({
+                    upc: pendingCode,
+                    name: `Item (${pendingCode})`,
+                    brand: 'Unknown',
+                    unit: 'ea',
+                    qty: 1,
+                  });
+                  // Background product lookup (session-cached)
+                  if (!productCache[pendingCode]) {
+                    try {
+                      if (abortRef.current) abortRef.current.abort();
+                      abortRef.current = new AbortController();
+                      const info = await fetchOFFByBarcode(pendingCode, abortRef.current.signal);
+                      if (info) {
+                        updateByUpc(pendingCode, {
+                          name: info.name,
+                          brand: info.brand,
+                          image_url: info.imageUrl,
+                          size: info.size,
+                        });
+                      }
+                    } catch {}
+                  } else {
+                    updateByUpc(pendingCode, productCache[pendingCode]);
+                  }
+                  // allow same code again after ~1s
+                  if (dedupeTimerRef.current) clearTimeout(dedupeTimerRef.current);
+                  dedupeTimerRef.current = setTimeout(() => {
+                    lastValueRef.current = null;
+                  }, 1000);
+                }}
+              >
+                <MaterialCommunityIcons name="plus" size={18} color="#fff" />
+                <Text style={styles.holdText}>Add</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.holdButton, { backgroundColor: colors.danger }]}
+                onPress={() => {
+                  setPendingCode(null);
+                  setTimeout(() => { lastValueRef.current = null; }, 500);
+                }}
+              >
+                <MaterialCommunityIcons name="close" size={18} color="#fff" />
+                <Text style={styles.holdText}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }

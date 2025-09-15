@@ -236,11 +236,19 @@ export default function Recipes() {
                     {item.strMeal} {item.missing ? `· missing ${item.missing}` : "· ready!"}
                   </Text>
                 </View>
-                {item.simplified.map((ing, idx) => (
-                  <Text key={idx} style={{ color: colors.fgDim }}>
-                    • {ing.name} — {ing.qty} {ing.unit}
-                  </Text>
-                ))}
+                {item.simplified.map((ing, idx) => {
+                  const inPantry = items.some(
+                    (p) => p.name.toLowerCase() === ing.name.toLowerCase() && p.qty >= ing.qty
+                  );
+                  return (
+                    <Text
+                      key={idx}
+                      style={{ color: inPantry ? 'green' : 'red' }}
+                    >
+                      • {ing.name} — {ing.qty} {ing.unit}
+                    </Text>
+                  );
+                })}
                 <Pressable
                   style={[styles.primary, { alignSelf: "flex-start", marginTop: 6 }]}
                   onPress={() => {
@@ -307,11 +315,14 @@ export default function Recipes() {
           <FlatList
             data={selectedIngs}
             keyExtractor={(i, idx) => `${i.name}-${idx}`}
-            renderItem={({ item }) => (
-              <Text style={styles.ing}>
-                • {item.name} — {item.qty} {item.unit}
-              </Text>
-            )}
+            renderItem={({ item }) => {
+              const inPantry = items.some(
+                (p) => p.name.toLowerCase() === item.name.toLowerCase() && p.qty >= item.qty
+              );
+              return (
+                <Text style={[styles.ing, { color: inPantry ? 'green' : 'red' }]}>• {item.name} — {item.qty} {item.unit}</Text>
+              );
+            }}
             ItemSeparatorComponent={() => <View style={{ height: 4 }} />}
             style={{ maxHeight: 200, marginTop: spacing.sm }}
           />
