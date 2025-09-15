@@ -82,7 +82,43 @@ export default function Recipes() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedName, setSelectedName] = useState<string>("");
   const [selectedIngs, setSelectedIngs] = useState<{ name: string; qty: number; unit: any }[] | null>(null);
-  const [simpleMode, setSimpleMode] = useState(true);
+
+  // --- NEW: User recipe creation state ---
+  const [creating, setCreating] = useState(false);
+  const [newRecipeName, setNewRecipeName] = useState("");
+  const [newIngredients, setNewIngredients] = useState<
+    { name: string; qty: number; unit: string }[]
+  >([]);
+  const [newIngName, setNewIngName] = useState("");
+  const [newIngQty, setNewIngQty] = useState("");
+  const [newIngUnit, setNewIngUnit] = useState("ea");
+
+  // --- NEW: Save user recipe (in-memory for now) ---
+  const [userRecipes, setUserRecipes] = useState<
+    { name: string; ingredients: { name: string; qty: number; unit: string }[] }[]
+  >([]);
+
+  const addIngredient = () => {
+    if (!newIngName || !newIngQty) return;
+    setNewIngredients([
+      ...newIngredients,
+      { name: newIngName, qty: Number(newIngQty), unit: newIngUnit },
+    ]);
+    setNewIngName("");
+    setNewIngQty("");
+    setNewIngUnit("ea");
+  };
+
+  const saveRecipe = () => {
+    if (!newRecipeName || newIngredients.length === 0) return;
+    setUserRecipes([
+      ...userRecipes,
+      { name: newRecipeName, ingredients: newIngredients },
+    ]);
+    setCreating(false);
+    setNewRecipeName("");
+    setNewIngredients([]);
+  };
 
   // --- manual search flow ---
   const onSearch = async () => {
@@ -114,7 +150,7 @@ export default function Recipes() {
 
       const pantryNames = items.map((i) => i.name);
       const simplified = simplifyIngredients(ings as any, pantryNames, { maxItems: 7, minQty: 0.25 });
-      setSelectedIngs(simpleMode ? (simplified as any) : (ings as any));
+      setSelectedIngs(simplified as any); // Always use simplified
     } catch (e: any) {
       Alert.alert("Load recipe error", String(e?.message || e));
     } finally {
@@ -206,53 +242,40 @@ export default function Recipes() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.md }}>
-      <Text style={styles.title}>Recipes</Text>
 
-      {/* Quick ideas */}
-      <Pressable style={styles.primary} onPress={loadQuickIdeas} disabled={quickLoading}>
-        <Text style={styles.primaryText}>{quickLoading ? "Finding quick ideas…" : "Quick ideas (Simple)"}</Text>
-      </Pressable>
+      {/* NEW: Create Recipe Button */}
+      {!creating && (
+        <Pressable style={styles.primary} onPress={() => setCreating(true)}>
+          <Text style={styles.primaryText}>Create Recipe</Text>
+        </Pressable>
+      )}
 
-      {quickTried && quickMeals.length === 0 && !quickLoading ? (
-        <Text style={styles.helper}>Tried: {quickTried.join(", ")}</Text>
-      ) : null}
+      {/* Add spacing between Create Recipe button and Your Recipes header */}
+      {!creating && userRecipes.length > 0 && (
+        <View style={{ height: spacing.lg }} />
+      )}
 
-      {quickMeals.length > 0 && (
-        <View style={styles.detail}>
-          <Text style={styles.detailTitle}>Based on your pantry</Text>
+      {/* NEW: Show user recipes */}
+      {userRecipes.length > 0 && (
+        <View>
           <FlatList
-            data={quickMeals}
-            keyExtractor={(m) => m.idMeal}
-            ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+            data={userRecipes}
+            keyExtractor={(r, idx) => `${r.name}-${idx}`}
             renderItem={({ item }) => (
-              <View style={{ gap: 6 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  {item.strMealThumb ? (
-                    <Image source={{ uri: item.strMealThumb }} style={styles.thumb} />
-                  ) : (
-                    <View style={[styles.thumb, { opacity: 0.6 }]} />
+              <View style={styles.detail}>
+                <Text style={styles.detailTitle}>{item.name}</Text>
+                <FlatList
+                  data={item.ingredients}
+                  keyExtractor={(i, idx) => `${i.name}-${idx}`}
+                  renderItem={({ item: ing }) => (
+                    <Text style={styles.ing}>• {ing.name} — {ing.qty} {ing.unit}</Text>
                   )}
-                  <Text style={{ color: colors.fg, fontWeight: "700", flexShrink: 1 }}>
-                    {item.strMeal} {item.missing ? `· missing ${item.missing}` : "· ready!"}
-                  </Text>
-                </View>
-                {item.simplified.map((ing, idx) => {
-                  const inPantry = items.some(
-                    (p) => p.name.toLowerCase() === ing.name.toLowerCase() && p.qty >= ing.qty
-                  );
-                  return (
-                    <Text
-                      key={idx}
-                      style={{ color: inPantry ? 'green' : 'red' }}
-                    >
-                      • {ing.name} — {ing.qty} {ing.unit}
-                    </Text>
-                  );
-                })}
+                  style={{ maxHeight: 120 }}
+                />
                 <Pressable
-                  style={[styles.primary, { alignSelf: "flex-start", marginTop: 6 }]}
+                  style={[styles.primary, { alignSelf: "flex-start", marginTop: spacing.sm }]}
                   onPress={() => {
-                    const res = cookFromIngredients(item.simplified as any);
+                    const res = cookFromIngredients(item.ingredients as any);
                     if (res.ok) Alert.alert("Cooked!", "Ingredients deducted from pantry.");
                     else {
                       const lines = res.shortages.map((s) => `• ${s.name}`).join("\n");
@@ -265,6 +288,74 @@ export default function Recipes() {
               </View>
             )}
           />
+        </View>
+      )}
+
+      {/* NEW: Recipe Creation Form */}
+      {creating && (
+        <View style={styles.detail}>
+          <Text style={styles.detailTitle}>Create a Recipe</Text>
+          {/* Add this spacer for more vertical space */}
+          <View style={{ height: spacing.lg }} />
+          <View style={{ marginBottom: spacing.sm }}>
+            <TextInput
+              value={newRecipeName}
+              onChangeText={setNewRecipeName}
+              placeholder="Recipe name"
+              style={[
+                styles.inputLight,
+                styles.inputTall,
+                { color: "#fff" } // Ensure this is last
+              ]}
+              placeholderTextColor={colors.fgDim}
+              selectionColor="#fff"
+              importantForAccessibility="yes"
+              allowFontScaling={false}
+            />
+          </View>
+          <View style={styles.inputRow}>
+            <TextInput
+              value={newIngName}
+              onChangeText={setNewIngName}
+              placeholder="Ingredient"
+              style={[styles.input, styles.inputLight, { flex: 2 }]}
+              placeholderTextColor={colors.fgDim}
+            />
+            <TextInput
+              value={newIngQty}
+              onChangeText={setNewIngQty}
+              placeholder="Qty"
+              keyboardType="numeric"
+              style={[styles.input, styles.inputLight, { flex: 1 }]}
+              placeholderTextColor={colors.fgDim}
+            />
+            <TextInput
+              value={newIngUnit}
+              onChangeText={setNewIngUnit}
+              placeholder="Unit"
+              style={[styles.input, styles.inputLight, { flex: 1 }]}
+              placeholderTextColor={colors.fgDim}
+            />
+            <Pressable style={styles.secondary} onPress={addIngredient}>
+              <Text style={styles.secondaryText}>Add</Text>
+            </Pressable>
+          </View>
+          <FlatList
+            data={newIngredients}
+            keyExtractor={(i, idx) => `${i.name}-${idx}`}
+            renderItem={({ item }) => (
+              <Text style={styles.ing}>• {item.name} — {item.qty} {item.unit}</Text>
+            )}
+            style={{ marginTop: spacing.sm, maxHeight: 120 }}
+          />
+          <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }}>
+            <Pressable style={styles.primary} onPress={saveRecipe}>
+              <Text style={styles.primaryText}>Save Recipe</Text>
+            </Pressable>
+            <Pressable style={styles.secondary} onPress={() => setCreating(false)}>
+              <Text style={styles.secondaryText}>Cancel</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -306,12 +397,6 @@ export default function Recipes() {
       {selectedIngs && (
         <View style={styles.detail}>
           <Text style={styles.detailTitle}>{selectedName}</Text>
-          <Pressable
-            style={[styles.secondary, { alignSelf: "flex-start", marginBottom: 8 }]}
-            onPress={() => setSimpleMode((v) => !v)}
-          >
-            <Text style={styles.secondaryText}>Simple mode: {simpleMode ? "ON" : "OFF"}</Text>
-          </Pressable>
           <FlatList
             data={selectedIngs}
             keyExtractor={(i, idx) => `${i.name}-${idx}`}
@@ -349,6 +434,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
+  // NEW: Light input style for recipe creation
+  inputLight: {
+    color: "#fff",
+    backgroundColor: "#222",
+    borderColor: "#4f8ef7", // subtle brand border
+    borderWidth: 1.5,
+    borderRadius: 18,        // more rounded
+    paddingHorizontal: 16,   // more padding
+    // Shadow for iOS
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    // Elevation for Android
+    elevation: 2,
+  },
+  inputTall: {
+    height: 56,
+    fontSize: 20,
+    paddingVertical: 14,
+    textAlignVertical: "center",
+  },
   primary: { backgroundColor: colors.brand, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 10 },
   primaryText: { color: "#fff", fontWeight: "700" },
   secondary: { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 10, paddingVertical: 8 },
@@ -380,4 +487,9 @@ const styles = StyleSheet.create({
   },
   detailTitle: { color: colors.fg, fontWeight: "700", fontSize: 16 },
   ing: { color: colors.fg },
+  inputRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
 });
