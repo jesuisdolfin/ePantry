@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Image } from "react-native";
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
 import { useIsFocused } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
@@ -49,7 +49,7 @@ export default function Scan() {
   const handleBarcodeScanned = async ({ data }: BarcodeScanningResult) => {
     if (!isFocused || !isActive || !data) return;
     if (!isRetailBarcode(data)) return;
-    if (lastValueRef.current === data || pendingCode) return; // dedupe for a short window or if popup is open
+    if (lastValueRef.current === data || pendingCode) return;
 
     lastValueRef.current = data;
     setPendingCode(data);
@@ -107,20 +107,36 @@ export default function Scan() {
 
       {/* Popup for add confirmation */}
       {pendingCode && (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', zIndex: 10 }]}> 
-          <View style={{ backgroundColor: colors.card, borderRadius: radius.lg, padding: 28, alignItems: 'center', width: 320, maxWidth: '90%' }}>
-            <Text style={{ color: colors.fg, fontWeight: '700', fontSize: 18, marginBottom: 12 }}>Add item?</Text>
-            <Text style={{ color: colors.fgDim, marginBottom: 18 }}>Barcode: {pendingCode}</Text>
-            <View style={{ flexDirection: 'row', gap: 16 }}>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', zIndex: 10 }]}> 
+          <View style={{ backgroundColor: colors.card, borderRadius: radius.lg, padding: 38, alignItems: 'center', width: 400, maxWidth: '96%', elevation: 8 }}>
+            <Text style={{ color: colors.fg, fontWeight: '800', fontSize: 24, marginBottom: 18, textAlign: 'center' }}>Add this item to your pantry?</Text>
+            {/* Show product info if available */}
+            {productCache[pendingCode] && (productCache[pendingCode].name || productCache[pendingCode].brand || productCache[pendingCode].image_url) ? (
+              <>
+                {productCache[pendingCode].image_url ? (
+                  <View style={{ marginBottom: 16 }}>
+                    <Image source={{ uri: productCache[pendingCode].image_url }} style={{ width: 90, height: 90, borderRadius: 12, marginBottom: 6, backgroundColor: '#eee' }} />
+                  </View>
+                ) : null}
+                <Text style={{ color: colors.fg, fontWeight: '700', fontSize: 18, marginBottom: 2, textAlign: 'center' }}>{productCache[pendingCode].name || `Item (${pendingCode})`}</Text>
+                {productCache[pendingCode].brand ? (
+                  <Text style={{ color: colors.fgDim, fontSize: 16, marginBottom: 6, textAlign: 'center' }}>{productCache[pendingCode].brand}</Text>
+                ) : null}
+              </>
+            ) : (
+              <Text style={{ color: colors.fg, fontWeight: '700', fontSize: 18, marginBottom: 8, textAlign: 'center' }}>{`Item (${pendingCode})`}</Text>
+            )}
+            <Text style={{ color: colors.fgDim, fontSize: 15, marginBottom: 22, textAlign: 'center' }}>Barcode: {pendingCode}</Text>
+            <View style={{ flexDirection: 'row', gap: 24, marginTop: 6 }}>
               <Pressable
-                style={[styles.holdButton, { backgroundColor: colors.brand }]}
+                style={[styles.holdButton, { backgroundColor: colors.brand, paddingHorizontal: 32, paddingVertical: 18 }]}
                 onPress={async () => {
                   setLastCode(pendingCode);
                   setPendingCode(null);
                   addOrIncrementByUpc({
                     upc: pendingCode,
-                    name: `Item (${pendingCode})`,
-                    brand: 'Unknown',
+                    name: productCache[pendingCode]?.name || `Item (${pendingCode})`,
+                    brand: productCache[pendingCode]?.brand || 'Unknown',
                     unit: 'ea',
                     qty: 1,
                   });
@@ -149,18 +165,18 @@ export default function Scan() {
                   }, 1000);
                 }}
               >
-                <MaterialCommunityIcons name="plus" size={18} color="#fff" />
-                <Text style={styles.holdText}>Add</Text>
+                <MaterialCommunityIcons name="plus" size={22} color="#fff" />
+                <Text style={[styles.holdText, { fontSize: 18 }]}>Add</Text>
               </Pressable>
               <Pressable
-                style={[styles.holdButton, { backgroundColor: colors.danger }]}
+                style={[styles.holdButton, { backgroundColor: colors.danger, paddingHorizontal: 32, paddingVertical: 18 }]}
                 onPress={() => {
                   setPendingCode(null);
                   setTimeout(() => { lastValueRef.current = null; }, 500);
                 }}
               >
-                <MaterialCommunityIcons name="close" size={18} color="#fff" />
-                <Text style={styles.holdText}>Cancel</Text>
+                <MaterialCommunityIcons name="close" size={22} color="#fff" />
+                <Text style={[styles.holdText, { fontSize: 18 }]}>Cancel</Text>
               </Pressable>
             </View>
           </View>
