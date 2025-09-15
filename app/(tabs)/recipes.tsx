@@ -91,7 +91,7 @@ export default function Recipes() {
   >([]);
   const [newIngName, setNewIngName] = useState("");
   const [newIngQty, setNewIngQty] = useState("");
-  const [newIngUnit, setNewIngUnit] = useState("ea");
+  const [newIngUnit, setNewIngUnit] = useState("");
 
   // --- NEW: Save user recipe (in-memory for now) ---
   const [userRecipes, setUserRecipes] = useState<
@@ -106,7 +106,7 @@ export default function Recipes() {
     ]);
     setNewIngName("");
     setNewIngQty("");
-    setNewIngUnit("ea");
+    setNewIngUnit("");
   };
 
   const saveRecipe = () => {
@@ -267,10 +267,24 @@ export default function Recipes() {
                 <FlatList
                   data={item.ingredients}
                   keyExtractor={(i, idx) => `${i.name}-${idx}`}
-                  renderItem={({ item: ing }) => (
-                    <Text style={styles.ing}>• {ing.name} — {ing.qty} {ing.unit}</Text>
-                  )}
-                  style={{ maxHeight: 120 }}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  renderItem={({ item: ing }) => {
+                    const inPantry = items.some(
+                      (p) => p.name.toLowerCase() === ing.name.toLowerCase() && p.qty >= ing.qty
+                    );
+                    return (
+                      <View style={[
+                        styles.pill,
+                        { backgroundColor: inPantry ? "#C7F9CC" : "#FFD6D6", borderColor: inPantry ? "#2D6A4F" : "#D7263D" }
+                      ]}>
+                        <Text style={{ color: inPantry ? "#2D6A4F" : "#D7263D", fontWeight: "600" }}>
+                          {ing.name} — {ing.qty} {ing.unit}
+                        </Text>
+                      </View>
+                    );
+                  }}
+                  style={{ marginVertical: spacing.sm }}
                 />
                 <Pressable
                   style={[styles.primary, { alignSelf: "flex-start", marginTop: spacing.sm }]}
@@ -303,14 +317,12 @@ export default function Recipes() {
               onChangeText={setNewRecipeName}
               placeholder="Recipe name"
               style={[
-                styles.inputLight,
+                styles.input,
                 styles.inputTall,
-                { color: "#fff" } // Ensure this is last
+                { color: colors.fg, backgroundColor: colors.card }
               ]}
               placeholderTextColor={colors.fgDim}
-              selectionColor="#fff"
-              importantForAccessibility="yes"
-              allowFontScaling={false}
+              selectionColor={colors.fg}
             />
           </View>
           <View style={styles.inputRow}>
@@ -366,11 +378,23 @@ export default function Recipes() {
           onChangeText={setQuery}
           placeholder="Search meals (e.g. pasta, chicken)…"
           placeholderTextColor={colors.fgDim}
-          style={styles.input}
+          style={[
+            styles.input,
+            {
+              flex: 1,
+              marginBottom: 0,
+              maxWidth: 220,      // limit max width
+              flexShrink: 1,      // allow shrinking
+            }
+          ]}
           onSubmitEditing={onSearch}
           returnKeyType="search"
         />
-        <Pressable style={styles.primary} onPress={onSearch} disabled={loading}>
+        <Pressable
+          style={[styles.primary, styles.searchButton]}
+          onPress={onSearch}
+          disabled={loading}
+        >
           <Text style={styles.primaryText}>{loading ? "Searching…" : "Search"}</Text>
         </Pressable>
       </View>
@@ -423,43 +447,58 @@ export default function Recipes() {
 const styles = StyleSheet.create({
   title: { color: colors.fg, fontWeight: "700", fontSize: 20, marginBottom: spacing.md },
   helper: { color: colors.fgDim, marginTop: 6, marginBottom: spacing.md },
-  searchRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md, marginBottom: spacing.md },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+  },
   input: {
-    flex: 1,
-    color: colors.fg,
-    backgroundColor: "#0f1318",
     borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderWidth: 1.5,
+    borderRadius: radius.lg, // more rounded
+    backgroundColor: colors.card,
+    color: colors.fg,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 18,
+    marginBottom: spacing.sm,
   },
   // NEW: Light input style for recipe creation
   inputLight: {
-    color: "#fff",
-    backgroundColor: "#222",
-    borderColor: "#4f8ef7", // subtle brand border
-    borderWidth: 1.5,
-    borderRadius: 18,        // more rounded
-    paddingHorizontal: 16,   // more padding
-    // Shadow for iOS
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    // Elevation for Android
-    elevation: 2,
+    backgroundColor: colors.bg,
+    color: colors.fg,
+    borderRadius: radius.lg,
   },
   inputTall: {
     height: 56,
     fontSize: 20,
     paddingVertical: 14,
     textAlignVertical: "center",
+    color: colors.fg,
+    borderRadius: radius.lg,
   },
-  primary: { backgroundColor: colors.brand, borderRadius: radius.md, paddingHorizontal: 14, paddingVertical: 10 },
-  primaryText: { color: "#fff", fontWeight: "700" },
-  secondary: { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: 10, paddingVertical: 8 },
-  secondaryText: { color: colors.fg, fontWeight: "600" },
+  primary: {
+    backgroundColor: colors.brand,
+    borderRadius: radius.lg,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: "#FF9800",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  primaryText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  secondary: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radius.lg,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  secondaryText: { color: colors.fg, fontWeight: "600", fontSize: 15 },
 
   card: {
     flexDirection: "row",
@@ -470,6 +509,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.lg,
     padding: spacing.sm,
+    // Add shadow for iOS
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    // Elevation for Android
+    elevation: 2,
   },
   thumb: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: "#111" },
   thumbFallback: { opacity: 0.6 },
@@ -484,6 +530,11 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginTop: spacing.md,
     marginBottom: spacing.md,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   detailTitle: { color: colors.fg, fontWeight: "700", fontSize: 16 },
   ing: { color: colors.fg },
@@ -491,5 +542,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.sm,
     marginBottom: spacing.sm,
+  },
+  pill: {
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  searchButton: {
+    width: 100, // fixed width for button
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: spacing.sm,
   },
 });

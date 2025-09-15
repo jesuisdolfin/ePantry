@@ -1,12 +1,12 @@
 export const colors = {
-  bg: "#0b0d10",
-  card: "#11151a",
-  fg: "#e8eef4",
-  fgDim: "rgba(232,238,244,0.65)",
-  brand: "#4f8ef7",
-  danger: "#ef4444",
-  muted: "#222831",
-  border: "rgba(255,255,255,0.08)",
+  bg: "#FFF8E7",         // Cream background
+  card: "#FFE5B4",       // Light orange/cream for cards
+  fg: "#7C3F00",         // Deep orange/brown for foreground text
+  fgDim: "rgba(124,63,0,0.65)", // Dimmed foreground
+  brand: "#FF9800",      // Vibrant orange for brand/primary
+  danger: "#D7263D",     // Strong red for danger
+  muted: "#FFD59E",      // Muted orange/cream
+  border: "rgba(255,152,0,0.18)", // Subtle orange border
 };
 
 export const radius = { sm: 10, md: 14, lg: 18 };
