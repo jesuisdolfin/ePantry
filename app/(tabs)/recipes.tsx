@@ -20,6 +20,8 @@ import {
 } from "../../src/lib/mealdb";
 import { simplifyIngredients } from "../../src/lib/recipes-simplify";
 import { useInventoryStore } from "../../src/state/inventory";
+import { getAIProvider } from '../../ai';
+
 
 // --- helpers ---
 const normalizeName = (s: string) =>
@@ -97,6 +99,13 @@ export default function Recipes() {
   const [userRecipes, setUserRecipes] = useState<
     { name: string; ingredients: { name: string; qty: number; unit: string }[] }[]
   >([]);
+
+  // AI suggest state
+const [aiLoading, setAiLoading] = useState(false);
+const [aiRecipes, setAiRecipes] = useState<
+  { title: string; ingredientsUsed: string[]; missing: string[]; swaps?: string[]; steps: string[]; estTimeMins: number; difficulty: 'easy'|'med'|'hard' }[]
+>([]);
+
 
   const addIngredient = () => {
     if (!newIngName || !newIngQty) return;
@@ -240,6 +249,37 @@ export default function Recipes() {
     }
   };
 
+  async function onAISuggestFromPantry() {
+  try {
+    setAiLoading(true);
+    setAiRecipes([]);
+
+    // Convert your inventory items to the provider’s expected shape
+    const pantry = items.map(i => ({
+      name: i.name,
+      quantity: typeof i.qty === 'number' ? i.qty : Number(i.qty) || 0
+    }));
+
+    const ai = getAIProvider();
+    const res = await ai.suggestRecipes({
+      pantry,
+      prefs: { allergies: [] },           // plug user prefs if you have them
+      toolsAvailable: ['stovetop','oven'],
+      timeBudgetMins: 30
+    });
+
+    setAiRecipes(res.recipes || []);
+    if (!res.recipes?.length) {
+      Alert.alert('No ideas', 'AI did not return any recipes. Try adding more pantry items.');
+    }
+  } catch (e: any) {
+    Alert.alert('AI error', String(e?.message || e));
+  } finally {
+    setAiLoading(false);
+  }
+}
+
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, padding: spacing.md }}>
 
@@ -255,7 +295,6 @@ export default function Recipes() {
         <View style={{ height: spacing.lg }} />
       )}
 
-      {/* NEW: Show user recipes */}
       {userRecipes.length > 0 && (
         <View>
           <FlatList
@@ -440,8 +479,71 @@ export default function Recipes() {
           </Pressable>
         </View>
       )}
+
+      {/* --- AI Suggest From Pantry --- */}
+<View style={{ marginTop: spacing.md, marginBottom: spacing.md }}>
+  <Pressable
+    style={[styles.primary, { alignSelf: 'flex-start' }]}
+    onPress={onAISuggestFromPantry}
+    disabled={aiLoading}
+  >
+    <Text style={styles.primaryText}>
+      {aiLoading ? 'Thinking…' : 'AI: Suggest from Pantry'}
+    </Text>
+  </Pressable>
+
+  {aiLoading && <ActivityIndicator color={colors.fg} style={{ marginTop: 8 }} />}
+
+  {!!aiRecipes.length && (
+    <View style={styles.detail}>
+      <Text style={styles.detailTitle}>AI Suggestions</Text>
+      <FlatList
+        data={aiRecipes}
+        keyExtractor={(r, idx) => `${r.title}-${idx}`}
+        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+        renderItem={({ item }) => (
+          <View style={{ gap: 6 }}>
+            <Text style={[styles.name, { fontSize: 16 }]}>{item.title}</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Text style={{ color: colors.fgDim }}>
+                {item.estTimeMins} min • {item.difficulty}
+              </Text>
+            </View>
+
+            {/* Used & missing chips */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+              {item.ingredientsUsed.slice(0, 8).map((ing, i) => (
+                <View key={`${ing}-${i}`} style={[styles.pill, { backgroundColor: '#C7F9CC', borderColor: '#2D6A4F' }]}>
+                  <Text style={{ color: '#2D6A4F', fontWeight: '600' }}>{ing}</Text>
+                </View>
+              ))}
+              {item.missing.slice(0, 4).map((ing, i) => (
+                <View key={`miss-${ing}-${i}`} style={[styles.pill, { backgroundColor: '#FFD6D6', borderColor: '#D7263D' }]}>
+                  <Text style={{ color: '#D7263D', fontWeight: '600' }}>Missing: {ing}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* First few steps */}
+            <View style={{ marginTop: 6 }}>
+              {item.steps.slice(0, 5).map((s, i) => (
+                <Text key={i} style={styles.ing}>• {s}</Text>
+              ))}
+              {item.steps.length > 5 && (
+                <Text style={[styles.ing, { opacity: 0.7 }]}>…and {item.steps.length - 5} more steps</Text>
+              )}
+            </View>
+          </View>
+        )}
+      />
+    </View>
+  )}
+</View>
+
     </View>
   );
+
+  
 }
 
 const styles = StyleSheet.create({
@@ -557,4 +659,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginLeft: spacing.sm,
   },
+pillSmall: {
+  borderRadius: 16,
+  borderWidth: 1,
+  paddingHorizontal: 10,
+  paddingVertical: 4,
+},
+
 });
